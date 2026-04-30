@@ -54,6 +54,12 @@
 
 ## 阶段 2：Existing Context 盘点
 
+### 连接确认
+
+```
+get_editor_state({ include_schema: true })   → 确认 Pencil MCP 已连接
+```
+
 ### Brand Context（有具体品牌时）
 
 执行品牌资产协议（详见 SKILL.md 主文档）：
@@ -70,16 +76,27 @@ Step 5: 验证（get_screenshot）
 
 如果有现有 .pen 文件或设计系统：
 
-1. `batch_get({ action: "get_tree" })` — 了解现有组件结构
-2. `batch_get({ action: "list_components" })` — 列出已有组件
-3. `get_variables()` — 读取现有变量系统
-4. 确定哪些组件可以复用
+```
+batch_get({ filePath })                                             → 了解现有结构
+batch_get({ filePath, patterns: [{ reusable: true }], readDepth: 2 }) → 列出已有组件
+get_variables({ filePath })                                          → 读取现有变量系统
+```
 
 ### Asset Context（图标/图片资源）
 
 - 图标：优先使用 Pencil 内置 icon_font（Lucide / Material / Feather / Phosphor）
 - 图片：从 Wikimedia Commons / Met Museum / Unsplash 获取真实图片
 - 不要用 emoji 或手绘 SVG
+
+### 多尺寸策略决策
+
+判断是否需要多套尺寸：
+
+```
+用户提到"手机端" / "移动端" / "响应式"？
+  → YES: 需要桌面 + 移动两套 Frame，共享 reusable 组件
+  → NO:  单套 Frame，默认桌面端（1440px）
+```
 
 ---
 
@@ -105,7 +122,7 @@ canvas
 
 ### 组件树设计
 
-识别哪些元素会成为 reusable 组件：
+识别哪些元素会成为 reusable 组件（命名规范：`{功能}-{层级}`）：
 
 ```
 # 可复用组件（标记 reusable）
@@ -113,7 +130,7 @@ button-primary (frame)
 card-article (frame)
 input-text (frame)
 
-# 页面专属实例（用 copy）
+# 页面专属实例（用 C() 创建）
 page-landing-hero
 page-landing-features
 ```
@@ -123,25 +140,23 @@ page-landing-features
 在 `set_variables` 之前，先规划变量结构：
 
 ```
-$color
-  ├── brand-primary
-  ├── brand-secondary
-  ├── ink-primary
-  ├── ink-secondary
-  ├── surface-default
-  └── ...
+$color-brand-primary    # 品牌主色
+$color-brand-accent     # 品牌强调色
+$color-ink-primary      # 主文字色
+$color-ink-secondary    # 次文字色
+$color-surface          # 主背景
+$color-surface-alt      # 次背景
+$color-border           # 边框色
 
-$spacing
-  ├── xs (4)
-  ├── sm (8)
-  ├── md (16)
-  ├── lg (24)
-  ├── xl (48)
-  └── ...
+$spacing-xs (4)
+$spacing-sm (8)
+$spacing-md (16)
+$spacing-lg (24)
+$spacing-xl (48)
+$spacing-2xl (64)
 
-$font
-  ├── display (Newsreader)
-  └── body (Inter)
+$font-display (Newsreader)
+$font-body (Inter)
 ```
 
 ---
@@ -152,58 +167,88 @@ $font
 
 **原则：先骨架 → 再组件 → 后实例**
 
-#### Step 4.1：创建主 Frame 骨架
+#### Step 4.1：设置变量
 
-```json
-{
-  "operations": [
-    { "type": "create", "element": { "id": "header", "type": "frame", "width": 1440, "height": 80, "fill": "#FFFFFF" }},
-    { "type": "create", "element": { "id": "hero", "type": "frame", "width": 1440, "height": 600, "fill": "#F8F7F4" }},
-    { "type": "create", "element": { "id": "features", "type": "frame", "width": 1440, "height": 400, "layout": "horizontal", "gap": 24 }},
-    { "type": "create", "element": { "id": "footer", "type": "frame", "width": 1440, "height": 120, "fill": "#1A1A1A" }}
-  ]
-}
+```
+set_variables({
+  filePath: "design.pen",
+  variables: {
+    "color-brand-primary": { "type": "color", "value": "#1A1A1A" },
+    "color-surface": { "type": "color", "value": "#F8F7F4" },
+    "color-surface-alt": { "type": "color", "value": "#FFFFFF" },
+    "color-ink-primary": { "type": "color", "value": "#1A1A1A" },
+    "color-ink-secondary": { "type": "color", "value": "#6B7280" },
+    "spacing-base": { "type": "number", "value": 8 },
+    "font-display": { "type": "string", "value": "Newsreader" },
+    "font-body": { "type": "string", "value": "Inter" }
+  }
+})
 ```
 
-#### Step 4.2：截图确认骨架
-```
-get_screenshot({ frame: "header" })
-get_screenshot({ full_page: true })
-```
+#### Step 4.2：创建主 Frame 骨架
 
-#### Step 4.3：创建 reusable 组件
-
-```json
-{
-  "operations": [
-    { "type": "create", "element": {
-      "id": "feature-card",
-      "type": "frame",
-      "width": 300,
-      "height": 200,
-      "fill": "#FFFFFF",
-      "reusable": true
-    }}
-  ]
-}
+```
+batch_design({
+  filePath: "design.pen",
+  operations: `
+    header = I(document, { type: "frame", name: "header", w: 1440, h: 80, fill: "$color-surface", layout: "horizontal", padding: 16, gap: 24 })
+    hero = I(document, { type: "frame", name: "hero", w: 1440, h: 600, fill: "$color-surface-alt", layout: "vertical", padding: [80, 64], gap: 24 })
+    features = I(document, { type: "frame", name: "features", w: 1440, h: 400, fill: "$color-surface", layout: "horizontal", gap: 24, padding: 64 })
+    footer = I(document, { type: "frame", name: "footer", w: 1440, h: 120, fill: "$color-brand-primary", layout: "horizontal", padding: 24 })
+  `
+})
 ```
 
-#### Step 4.4：用 copy 创建实例
+#### Step 4.3：截图确认骨架
 
-```json
-{
-  "operations": [
-    { "type": "copy", "sourceId": "feature-card", "newId": "feature-card-1", "x": 0, "y": 0 },
-    { "type": "copy", "sourceId": "feature-card", "newId": "feature-card-2", "x": 324, "y": 0 },
-    { "type": "copy", "sourceId": "feature-card", "newId": "feature-card-3", "x": 648, "y": 0 },
-    { "type": "insert", "parent": "features", "child": "feature-card-1" },
-    { "type": "insert", "parent": "features", "child": "feature-card-2" },
-    { "type": "insert", "parent": "features", "child": "feature-card-3" }
-  ]
-}
+```
+get_screenshot({ filePath: "design.pen", nodeId: "header" })
+get_screenshot({ filePath: "design.pen", nodeId: "hero" })
 ```
 
-#### Step 4.5：每步截图确认
+#### Step 4.4：创建 reusable 组件
+
+```
+batch_design({
+  filePath: "design.pen",
+  operations: `
+    cardComp = I(document, { type: "frame", name: "feature-card", w: 300, h: 200, fill: "$color-surface-alt", reusable: true, cornerRadius: 8, layout: "vertical", padding: 24, gap: 16 })
+    cardTitle = I(cardComp, { type: "text", name: "card-title", content: "Feature Title", fontSize: 20, fontFamily: "$font-display", fontWeight: 700, fill: "$color-ink-primary" })
+    cardDesc = I(cardComp, { type: "text", name: "card-desc", content: "Feature description goes here.", fontSize: 14, fontFamily: "$font-body", fontWeight: 400, fill: "$color-ink-secondary", lineHeight: 1.6 })
+  `
+})
+```
+
+#### Step 4.5：用 C() 创建实例
+
+```
+batch_design({
+  filePath: "design.pen",
+  operations: `
+    card1 = C("feature-card", { newId: "feature-card-1", x: 0, y: 0 })
+    card2 = C("feature-card", { newId: "feature-card-2", x: 324, y: 0 })
+    card3 = C("feature-card", { newId: "feature-card-3", x: 648, y: 0 })
+    M("feature-card-1", "features", 0)
+    M("feature-card-2", "features", 1)
+    M("feature-card-3", "features", 2)
+  `
+})
+```
+
+#### Step 4.6：用 descendants 定制实例
+
+```
+batch_design({
+  filePath: "design.pen",
+  operations: `
+    U("feature-card-1", { descendants: { "card-title": { content: "Fast Setup" }, "card-desc": { content: "Get started in minutes with our streamlined onboarding." } } })
+    U("feature-card-2", { descendants: { "card-title": { content: "Smart Design" }, "card-desc": { content: "AI-assisted layouts that adapt to your content." } } })
+    U("feature-card-3", { descendants: { "card-title": { content: "Ship Faster" }, "card-desc": { content: "From concept to production in record time." } } })
+  `
+})
+```
+
+#### Step 4.7：每步截图确认
 
 每完成一个主要部分，就 `get_screenshot` 确认，发现偏差立即停。
 
@@ -230,8 +275,8 @@ get_screenshot({ full_page: true })
 - CTA 够突出吗？
 
 **细节执行：**
-- 运行 `snapshot_layout({ action: "check_alignment", grid: 8 })`
-- 运行 `snapshot_layout({ action: "find_overlaps" })`
+- 运行 `snapshot_layout({ filePath, problemsOnly: true })` 检查布局问题
+- 运行 `search_all_unique_properties({ filePath, parents: [...], properties: ["fillColor", "textColor"] })` 检查颜色一致性
 
 **功能性：**
 - 所有交互元素有状态吗（hover/active）？
@@ -279,15 +324,16 @@ get_screenshot({ full_page: true })
 | 代码导出 | 如需要（React/Vue/HTML） |
 | 设计决策记录 | 存入 review log |
 
-### 导出代码
-
-如用户需要代码交付：
+### 导出
 
 ```
-# 在 Pencil 里选中 Frame 或组件
-# 使用 Pencil 内置导出功能，或通过 Code 模式：
-"Generate React code for this component"
-"Export as HTML with Tailwind CSS"
+export_nodes({
+  filePath: "design.pen",
+  nodeIds: ["page-home"],
+  outputDir: "D:/exports",
+  format: "png",
+  scale: 2
+})
 ```
 
 ### 版本控制记录

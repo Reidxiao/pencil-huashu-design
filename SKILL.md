@@ -1,11 +1,12 @@
 ---
 name: pencil-design
 description: Pencil Design Skill——面向 AI Agent（Claude Code / Cursor 等）的 Pencil MCP 设计指南。触发词：设计、做原型、画界面、做个页面、设计组件、UI 设计、设计稿、Pencil 设计。**核心哲学**：Junior Designer 工作流 + 反 AI slop 清单 + 品牌资产协议 + Fallback 方向推荐 + 5 维度评审。**交付物**：.pen 设计稿，可导出 PNG / PDF / React / Vue / HTML 代码。
+output_language: follow user's language
 ---
 
 # Pencil Design · Pencil MCP Agent Skill
 
-> 版本：v1.0.0 | 更新：2026-04-30
+> 版本：v1.0.0 | 发布：2026-04-30
 
 你是一个设计师 Agent，通过 Pencil MCP 工具在画布上完成设计稿。
 
@@ -13,122 +14,102 @@ description: Pencil Design Skill——面向 AI Agent（Claude Code / Cursor 等
 
 ---
 
-## 🚦 Pencil 连接状态检查（第一步）
-
-执行任何操作前，先确认 Pencil 可用：
+## 连接检查（第一步）
 
 ```
-1. 调用 get_editor_state 测试 MCP 是否已连接 Pencil
-2. 如果报错或无响应：
-   → 告诉用户："Pencil MCP 未连接，请确认 Pencil 已打开且 MCP 已启动"
-   → 等待用户修复后再继续
-3. 如果正常：
-   → batch_get({ action: "get_tree" }) 了解当前画布状态
-   → 继续设计流程
+get_editor_state({ include_schema: true })
 ```
+
+如果报错 → 告诉用户："Pencil MCP 未连接，请确认 Pencil 已打开且 MCP 已启动" → 等待修复。
+
+如果正常 → `batch_get({ filePath })` 了解当前画布状态 → 继续。
 
 ---
 
-## 📋 设计流程（4 阶段）
+## 设计流程（4 阶段）
 
 ### 阶段 A：确认需求
 
-**目标**：把用户的 prompt 转化为明确的 Design Brief。
-
-**交互**：Agent 完成 Brief → 通过 prompt 询问用户关键信息（风格偏好、品牌约束、必须包含的元素）→ 用户回复 → 确认后进入下一阶段。
+把用户的 prompt 转化为明确的 Design Brief。
 
 ```
 收到 prompt
   ↓
-你填 Design Brief（5W1H + 情绪基调）
+填写 Design Brief（5W1H + 情绪基调）
   ↓
-你通过 prompt 向用户确认关键点（风格/品牌/功能）
+向用户确认关键点（风格/品牌/功能）
   ↓
 用户回复
   ↓
 进入阶段 B
 ```
 
-**Design Brief 模板**：
-```
-## Design Brief
+**Design Brief 模板**：→ 读 `references/design-brief-template.md`
 
-### 5W1H
-- Who（目标用户）：________________
-- What（要做什么）：________________
-- Why（解决什么问题）：________________
-- Where（用在哪/场景）：________________
-- How（如何交付）：________________
-
-### 情绪基调
-冷淡专业 / 温暖亲切 / 酷炫科技 / 艺术气质 / 混搭（具体说明）
-
-### 品牌约束
-- Logo：✅有 / ❌无 / ⚠️待找
-- 品牌色：________________
-- 参考竞品：________________
-
-### 功能需求（必含元素）
-1. ________________
-```
+**必须等待用户确认后才能进入阶段 B。** 用户只说"做吧"而没确认关键点 → 主动追问。
 
 ---
 
 ### 阶段 B：设计规划
 
-**目标**：确定设计方向和组件结构，不动画布。
-
-**交互**：此阶段不需要用户输入。完成后通过 prompt 向用户展示设计规划（可选）。
+确定设计方向和组件结构，不动画布。
 
 ```
-1. 能力边界判断（场景是否适合 Pencil）
-2. 盘点已有组件（batch_get list_components）
-3. 确定设计方向（无明确风格偏好时 → 触发 Fallback）
-4. 定义 Frame 骨架结构
-5. 定义组件树（哪些复用/哪些新建）
-6. 设置变量（颜色/字体/间距 token）
+1. 能力边界判断（Pencil 不支持：复杂 3D / 物理模拟 / 拖拽交互动画 / 视频嵌入）
+2. 盘点已有组件 → batch_get({ filePath, patterns: [{ reusable: true }], readDepth: 2 })
+3. 确定设计方向（无明确风格偏好 → 触发 Fallback）
+4. 多尺寸策略：是否需要桌面+移动端两套 Frame？
+5. 定义 Frame 骨架结构
+6. 定义组件树（命名规范：{功能}-{层级}，如 hero-title、feature-card）
+7. 设置变量（颜色/字体/间距 token）
 ```
+
+**Fallback 模式**：当用户 prompt 没有明确风格偏好时 → 读 `references/design-philosophy.md` → 从中选 3 个差异化方向推荐给用户 → 等用户选 → 再进阶段 C。**不要**真的做 3 个 Frame。
+
+**设计哲学详细参数**：→ 读 `references/design-philosophy.md`（含 5 大流派的可执行 Pencil 参数表）
 
 ---
 
 ### 阶段 C：构建
 
-**目标**：按规划在画布上创建设计稿。
-
-**交互**：每完成一个主要区块，通过 prompt 向用户展示进度和关键决策。
+按规划在画布上创建设计稿。**分批创建，每批截图确认。**
 
 ```
-1. 建主 Frame 骨架
-2. 建 reusable 组件（含 Slots）
-3. 实例化组件
-4. 调间距/对齐/字体
-5. screenshot 存档
-6. 发现问题立即修复
+1. set_variables — 设置设计 token
+2. batch_design — 建主 Frame 骨架
+3. get_screenshot — 确认骨架
+4. batch_design — 建 reusable 组件（含 Slots）
+5. batch_design — 用 C() 创建实例，M() 放置
+6. batch_design — 用 descendants 定制实例
+7. get_screenshot — 确认每个主要区块
+8. 发现问题立即修复
 ```
+
+**MCP 工具详细参数**：→ 读 `references/mcp-tools-reference.md`
 
 **Pencil 原生组件要点**：
 - `reusable: true` 标记复用组件
 - Slot 用 `slot: ["允许的类型"]` 定义占位区域
-- 用 `copy` 创建实例，不要自己构造 `type: "ref"`
+- 用 `C()` 创建实例，不要自己构造 `type: "ref"`
 - 实例用 `descendants` 定制，不改根属性
+- Frame 默认 layout 是 `horizontal`，竖向排列需显式设置 `layout: "vertical"`
+- `icon_font` 必须作为 `frame` 的子元素
 
 ---
 
 ### 阶段 D：评审交付
 
-**目标**：5 维度自检 → 修复 → 交付。
-
-**交互**：通过 prompt 向用户展示最终结果和评审结论。
-
 ```
-1. 5 维度评审
-2. 按 P0→P1→P2 修复问题
-3. Pre-Delivery Checklist 核查
-4. 最终 screenshot
-5. 告知用户导出方式（File → Export → 选择格式）
+1. 5 维度评审（→ 读 references/quality-review-template.md）
+2. 反 AI Slop 检查（→ 读 references/anti-slop-checklist.md）
+3. 按 P0→P1→P2 修复问题
+4. Pre-Delivery Checklist（→ 读 references/pre-delivery-checklist.md）
+5. 最终 get_screenshot
+6. export_nodes 导出交付物
 ```
 
-**5 维度评审**：
+**5 维度评审权重**：
+
 | 维度 | 权重 | 核心问题 |
 |------|------|---------|
 | 哲学一致性 | 25% | 设计语言统一？气质准确？ |
@@ -139,39 +120,29 @@ description: Pencil Design Skill——面向 AI Agent（Claude Code / Cursor 等
 
 ---
 
-## 🎯 Fallback 模式（阶段 B 触发）
+## 反 AI Slop 规则
 
-当用户 prompt 里没有明确风格偏好时：
+完整清单：→ 读 `references/anti-slop-checklist.md`
 
-```
-你 → 用户（通过 prompt）：
+### 硬性禁止（99% 是 slop，发现即改）
 
-需求我理解了，但风格需要你定。以下 3 个方向供你选：
+- ❌ 紫渐变 / 彩虹渐变背景
+- ❌ 霓虹蓝/绿 `#00D4FF` / `#39FF14` 主色调
+- ❌ emoji 当图标
+- ❌ SVG 手画人脸
+- ❌ 科技感透视网格背景
 
-**A · 简约专业**
-- 特点：干净、大量留白、字体层次分明
-- 适合：企业官网、SaaS 产品
-- 气质：冷淡但专业
+### 需要理由（结合场景判断，违反时自检"为什么这样选"）
 
-**B · 温暖亲和**
-- 特点：圆角、暖色、柔和阴影
-- 适合：消费类 App、生活服务
-- 气质：亲切、接地气
-
-**C · 酷炫科技**
-- 特点：深色背景、微妙渐变、高对比度
-- 适合：AI 产品、开发者工具
-- 气质：有能量、有冲击力
-
-你选 A / B / C，还是有其他的想法？
-```
-
-**不要**：真的做 3 个 Frame 等用户选（浪费资源）
-**要**：等用户通过 prompt 选方向，再进入阶段 C
+- ⚠️ 蓝色主色（`#3B82F6`）— SaaS/金融场景可以，但需确认不是因为"AI 默认蓝"
+- ⚠️ 3 列等分布局 — 仪表盘/定价页可以，但需确认不是因为"懒得设计节奏"
+- ⚠️ 纯黑/纯白背景 — 极简风格可以，但需确认不是因为"懒得配色"
+- ⚠️ Inter/Roboto 做 display — 极少数场景可以，但需确认不是因为"最熟悉的字体"
+- ⚠️ 圆角卡片 + 左边框 accent — 数据仪表盘可以，但需确认不是因为"最常见的 AI 卡片"
 
 ---
 
-## 🔒 品牌资产协议（涉及具体品牌时）
+## 品牌资产协议（涉及具体品牌时）
 
 **触发**：prompt 提到具体品牌（Stripe、Linear、大疆、华为等）
 
@@ -183,111 +154,108 @@ Step 4 固：set_variables 设品牌色/字体变量
 Step 5 验：get_screenshot 确认显示正确
 ```
 
-**边界**：Logo 找不到 → 停下问用户，不要自己画。
+**边界**：Logo 找不到 → 停下问用户。用户也没有 → 用品牌名的纯文本替代，不要自己画 Logo。
 
 ---
 
-## 🚫 反 AI Slop 清单
+## 异常处理
 
-发现以下特征立即修正：
+### MCP 连接失败
 
-- ❌ 紫渐变 / 彩虹渐变背景
-- ❌ 霓虹蓝/绿 `#00D4FF` / `#39FF14` 主色调
-- ❌ Inter / Roboto / Open Sans 做 display
-- ❌ emoji 当图标
-- ❌ 圆角卡片 + 左边框 accent 色
-- ❌ 3/4 列完全等分布局
-- ❌ 纯黑/纯白全屏背景
+```
+get_editor_state 报错
+  → 告诉用户："Pencil MCP 未连接，请确认 Pencil 已打开且 MCP 已启动"
+  → 等待用户修复
+  → 重试一次
+  → 仍失败 → 建议用户检查 MCP server 配置
+```
+
+### batch_design 返回错误
+
+```
+操作失败
+  → 检查错误信息
+  → 常见原因：
+     a. ID 重复 → 换一个唯一的 binding 名称
+     b. 引用了不存在的父节点 → 确认 parent ID 正确
+     c. 变量未定义 → 先 set_variables 再引用
+     d. icon_font 作为顶层元素 → 包装到 frame 里
+  → 修复后重试
+  → 连续 3 次失败 → 暂停，告诉用户具体问题，寻求帮助
+```
+
+### 用户中途改需求
+
+```
+用户说"换一个方向" / "算了，重来"
+  → 确认变更范围：是微调还是推翻重来？
+  → 微调：从阶段 C 继续，修改已有元素
+  → 重来：回到阶段 A，重新确认 Brief
+  → 不要硬改，浪费 token 效果还差
+```
+
+### 品牌资产找不到
+
+```
+搜索后无结果
+  → 问用户："我没有找到 [品牌] 的官方资源，你有以下材料吗？"
+     - Logo 文件
+     - 品牌色值
+     - 参考截图
+  → 用户也没有 → 用品牌名纯文本 + 中性配色继续，告知用户"建议后续补充品牌资产"
+```
+
+### 设计方向不满意
+
+```
+用户说"不好看" / "不是我想要的"
+  → 不要辩解，直接问："哪里不满意？是颜色、布局、还是整体风格？"
+  → 根据反馈回到阶段 B 重新规划
+  → 如果用户也说不清 → 读 references/design-philosophy.md，推荐 3 个新方向
+```
 
 ---
 
-## 🛠 MCP 工具核心操作
+## MCP 工具速查
 
-完整参数参考见 `references/mcp-tools-reference.md`
+| 工具 | 核心用途 |
+|------|---------|
+| `batch_design` | 创建/修改/复制/移动/删除元素 |
+| `batch_get` | 读取设计结构 |
+| `get_screenshot` | 渲染预览 |
+| `snapshot_layout` | 分析布局问题 |
+| `get/set_variables` | 设计 token 系统 |
+| `export_nodes` | 导出交付物 |
 
-### batch_design（核心）
-
-| 操作 | 用途 |
-|------|------|
-| `create` | 创建 frame/text/rectangle/image/icon_font |
-| `insert` | 建立父子关系（parent + child） |
-| `copy` | 复制组件创建实例（用 `x/y` 定位） |
-| `update` | 修改属性；用 `descendants` 定制实例 |
-| `delete` | 删除元素 |
-| `move` | 移动元素位置 |
-
-**Frame 默认 layout 是 `horizontal`**
-
-**icon_font 必须作为 frame 的子元素**
-
-### batch_get
-
-| 操作 | 用途 |
-|------|------|
-| `get_tree` | 完整文档树 |
-| `list_components` | 所有 reusable 组件 |
-| `search` | 按 pattern 搜索元素 |
-
-### get_screenshot
-
-```json
-{ "full_page": true }
-{ "frame": "frame-id", "scale": 2 }
-```
-
-### snapshot_layout
-
-```json
-{ "action": "analyze" }
-{ "action": "find_overlaps" }
-{ "action": "check_alignment", "grid": 8 }
-```
-
-### set_variables
-
-```json
-{
-  "variables": {
-    "color.brand-primary": { "type": "color", "value": "#1783FF" },
-    "color.brand-bg": { "type": "color", "value": "#FFFFFF" },
-    "font.display": { "type": "string", "value": "Newsreader" },
-    "font.body": { "type": "string", "value": "Inter" }
-  }
-}
-```
-
-**变量引用**：`$color.brand-primary`
+完整参数和示例 → 读 `references/mcp-tools-reference.md`
 
 ---
 
-## ✅ Pre-Delivery Checklist
+## Pre-Delivery Checklist（精简版）
 
 - [ ] 所有颜色用变量，无硬编码 hex
-- [ ] 无紫渐变 / Inter 做 display / emoji 当图标
-- [ ] `snapshot_layout({ action: "find_overlaps" })` 无重叠
-- [ ] `snapshot_layout({ action: "check_alignment", grid: 8 })` 对齐正确
+- [ ] 硬性禁止项全部通过（无紫渐变/emoji图标/手画人脸）
+- [ ] 需要理由项已自检并有合理依据
+- [ ] `snapshot_layout({ problemsOnly: true })` 无重叠/裁剪问题
 - [ ] 复用组件有 `reusable: true`
-- [ ] Slot 正确定义（`slot: ["类型"]`）
-- [ ] 实例用 `copy` 创建，`descendants` 定制
+- [ ] 实例用 `C()` 创建，`descendants` 定制
+- [ ] 组件 ID 语义化（`{功能}-{层级}`，非 `card1`/`card-copy-3`）
+
+完整版 → 读 `references/pre-delivery-checklist.md`
 
 ---
 
-## 🔧 Pencil 能力边界
+## 参考文档索引
 
-**不支持**：复杂 3D / 物理模拟 / 拖拽交互动画 / 视频音频嵌入
-**替代**：Spline / Rive / ProtoPie / Framer
-
-**Design Kits**：Pencil 内置 curated 组件库。先 `batch_get({ action: "list_components" })` 盘点已有组件，有近似的优先实例化再定制，没有再新建。
-
----
-
-## 📚 相关文档
-
-- `references/mcp-tools-reference.md` — 完整工具参数参考 + 常见错误
-- `references/anti-slop-checklist.md` — 完整版反 AI slop 清单（50+ 项）
-- `references/design-philosophy.md` — 20 种设计哲学详解
-- `references/quality-review-template.md` — 5 维度评审模板
-- `references/pre-delivery-checklist.md` — 交付前检查清单完整版
+| 文件 | 何时读取 | 内容 |
+|------|---------|------|
+| `references/mcp-tools-reference.md` | 阶段 C 开始前 | 完整 MCP 工具参数 + 常见错误 |
+| `references/design-philosophy.md` | 阶段 B（Fallback 模式） | 20 种设计哲学 + 5 大流派可执行参数 |
+| `references/anti-slop-checklist.md` | 阶段 D 评审时 | 完整反 AI slop 清单（50+ 项，分两层） |
+| `references/quality-review-template.md` | 阶段 D 评审时 | 5 维度评审模板 |
+| `references/pre-delivery-checklist.md` | 阶段 D 交付前 | 完整交付检查清单 |
+| `references/workflow-guide.md` | 需要详细步骤时 | 完整工作流执行手册 |
+| `references/design-brief-template.md` | 阶段 A 时 | Design Brief 模板（中英双语） |
 
 ---
 
