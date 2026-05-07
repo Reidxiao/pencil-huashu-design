@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/czhcpqfg-pencil-huashu-design-badge.png)](https://mseep.ai/app/czhcpqfg-pencil-huashu-design)
+
 # pencil-huashu-design
 
 > An AI Agent skill for designing with Pencil MCP — built with design philosophy from huashu-design
